@@ -21,6 +21,12 @@
     <ClCompile Include="AssemblyDecoder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="InstructionTable.h">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="InstructionTable.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\ressources\complex">

@@ -128,6 +128,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AssemblyDecoder.cpp" />
+    <ClCompile Include="InstructionTable.cpp" />
+    <ClCompile Include="InstructionTable.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\ressources\complex" />

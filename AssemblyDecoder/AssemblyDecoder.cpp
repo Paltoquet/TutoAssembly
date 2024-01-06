@@ -1,13 +1,9 @@
-// AssemblyDecoder.cpp : This file contains the 'main' function. Program execution begins and ends there.
-//
-
 
 #include "InstructionTable.h"
 
 #include <iostream>
 #include <fstream>
 #include <vector>
-#include <map>
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -17,16 +13,24 @@
  *  diff simple result
 */
 
-std::vector<const char*> registerMapping8bits = {
-	"al", "cl", "dl", "bl", "ah", "ch", "dh", "bh"
+std::vector<Register> registerMapping8bits = {
+	AL, CL, DL, BL, AH, CH, DH, BH
 };
 
-std::vector<const char*> registerMapping16bits = {
-	"ax", "cx", "dx", "bx", "sp", "bp", "si", "di"
+std::vector<Register> registerMapping16bits = {
+	AX, CX, DX, BX, SP, BP, SI, DI
 };
 
-std::vector<const char*> registerToMemory = {
-	"bx + si", "bx + di", "bp + si", "bp + di", "si", "di", "bp", "bx"
+// "bx + si", "bx + di", "bp + si", "bp + di", "si", "di", "bp", "bx"
+std::vector<Location> registerToMemory = {
+	{ BX, { SI, 0} },
+	{ BX, { DI, 0} },
+	{ BP, { SI, 0} },
+	{ BP, { DI, 0} },
+	{ UNKNOWNREG, { SI, 0} },
+	{ UNKNOWNREG, { DI, 0} },
+	{ UNKNOWNREG, { BP, 0} },
+	{ UNKNOWNREG, { BX, 0} },
 };
 
 void printBinary(unsigned char byte)
@@ -45,550 +49,202 @@ void printBinary(unsigned char byte)
 	printf("%s\n", buffer);
 }
 
-void executeOperation(const Operation& operation, std::ofstream& output, bool simulate)
+
+//cmp word [4834], 29
+
+void decodeInstruction(const std::vector<unsigned char>& data, size_t& index, Operation& result)
 {
-	printOperation(operation, output);
-	output << std::endl;
-}
-
-
-
-void decodeMove(const std::vector<unsigned char>& data, size_t& index, std::ofstream& output)
-{
-	const char* src = nullptr;
-	const char* dst = nullptr;
-
-	unsigned char movOps = data[index];
-	unsigned char argOps = data[index + 1];
-
-	bool isRegDestination, is16bitsOps;
-	is16bitsOps = movOps & 1;
-	isRegDestination = (movOps & 2);
-
-	unsigned char rm = (argOps & 7);
-	unsigned char reg = (argOps >> 3) & 7;
-	unsigned char mod = (argOps >> 6) & 7;
-
-	output << "mov ";
-	bool registerMode = mod == 3;
-	if (registerMode) {
-		if (is16bitsOps) {
-			src = isRegDestination ? registerMapping16bits[rm] : registerMapping16bits[reg];
-			dst = isRegDestination ? registerMapping16bits[reg] : registerMapping16bits[rm];
-		}
-		else {
-			src = isRegDestination ? registerMapping8bits[rm] : registerMapping8bits[reg];
-			dst = isRegDestination ? registerMapping8bits[reg] : registerMapping8bits[rm];
-		}
-		output << dst << ", " << src;
-	}
-	else {
-		// memory location
-		char address[32] = {};
-		address[0] = '[';
-		strcat(address, registerToMemory[rm]);
-		// offset value
-		int16_t offset = 0;
-		bool isDirectMemory = (mod == 0) && rm == 6;
-		if (isDirectMemory) {
-			address[0] = '[';
-			address[1] = '\0';
-			offset |= data[index + 3];
-			offset = offset << 8;
-			offset |= data[index + 2];
-		}
-		// fetch hi byte
-		else if (mod == 2) {
-			offset |= data[index + 3];
-			offset = offset << 8;
-			offset |= data[index + 2];
-		}
-		else if (mod == 1) {
-			int8_t shortOffset = data[index + 2];
-			offset = shortOffset;
-		}
-
-		if (offset) {
-			char offsetStr[16] = {};
-			sprintf(offsetStr, " + %d", offset);
-			strcat(address, offsetStr);
-		}
-		strcat(address, "]");
-
-		// load
-		if (isRegDestination) {
-			dst = is16bitsOps ? registerMapping16bits[reg] : registerMapping8bits[reg];
-			src = address;
-		}
-		// store
-		else {
-			dst = address;
-			src = is16bitsOps ? registerMapping16bits[reg] : registerMapping8bits[reg];
-		}
-		output << dst << ", " << src;
-		// offset
-		if (mod == 1) {
-			index = index + 1;
-		}
-		if (mod == 2 || isDirectMemory) {
-			index = index + 2;
-		}
-	}
-
-	output << std::endl;
-	// argops
-	index++;
-}
-
-
-
-void decodeRegisterOp(const std::vector<unsigned char>& data, size_t& index, std::ofstream& output)
-{
-	const char* src = nullptr;
-	const char* dst = nullptr;
-
-	unsigned char movOps = data[index];
-	unsigned char argOps = data[index + 1];
-
-	bool isRegDestination, is16bitsOps;
-	is16bitsOps = movOps & 1;
-	isRegDestination = (movOps & 2);
-
-	unsigned char rm = (argOps & 7);
-	unsigned char reg = (argOps >> 3) & 7;
-	unsigned char mod = (argOps >> 6) & 7;
-
-	output << "mov ";
-	bool registerMode = mod == 3;
-	if (registerMode) {
-		if (is16bitsOps) {
-			src = isRegDestination ? registerMapping16bits[rm] : registerMapping16bits[reg];
-			dst = isRegDestination ? registerMapping16bits[reg] : registerMapping16bits[rm];
-		}
-		else {
-			src = isRegDestination ? registerMapping8bits[rm] : registerMapping8bits[reg];
-			dst = isRegDestination ? registerMapping8bits[reg] : registerMapping8bits[rm];
-		}
-		output << dst << ", " << src;
-	}
-	else {
-		// memory location
-		char address[32] = {};
-		address[0] = '[';
-		strcat(address, registerToMemory[rm]);
-		// offset value
-		int16_t offset = 0;
-		bool isDirectMemory = (mod == 0) && rm == 6;
-		if (isDirectMemory) {
-			address[0] = '[';
-			address[1] = '\0';
-			offset |= data[index + 3];
-			offset = offset << 8;
-			offset |= data[index + 2];
-		}
-		// fetch hi byte
-		else if (mod == 2) {
-			offset |= data[index + 3];
-			offset = offset << 8;
-			offset |= data[index + 2];
-		}
-		else if (mod == 1) {
-			int8_t shortOffset = data[index + 2];
-			offset = shortOffset;
-		}
-
-		if (offset) {
-			char offsetStr[16] = {};
-			sprintf(offsetStr, " + %d", offset);
-			strcat(address, offsetStr);
-		}
-		strcat(address, "]");
-
-		// load
-		if (isRegDestination) {
-			dst = is16bitsOps ? registerMapping16bits[reg] : registerMapping8bits[reg];
-			src = address;
-		}
-		// store
-		else {
-			dst = address;
-			src = is16bitsOps ? registerMapping16bits[reg] : registerMapping8bits[reg];
-		}
-		output << dst << ", " << src;
-		// offset
-		if (mod == 1) {
-			index = index + 1;
-		}
-		if (mod == 2 || isDirectMemory) {
-			index = index + 2;
-		}
-	}
-
-	output << std::endl;
-	// argops
-	index++;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-void decodeImmediateMove(const std::vector<unsigned char>& data, size_t& index, std::ofstream& output)
-{
-	const char* dst = nullptr;
-
-	unsigned char movOps = data[index];
-	bool is16bitsOps;
-	is16bitsOps = movOps & 8; // 4th bits
-	unsigned char reg = movOps & 7;
-	dst = is16bitsOps ? registerMapping16bits[reg] : registerMapping8bits[reg];
-	// hard coded constant
-	int16_t offset = 0;
-	// fetch hi byte
-	if (is16bitsOps) {
-		offset |= data[index + 2];
-		offset = offset << 8;
-		offset |= data[index + 1];
-	}
-	else {
-		int8_t shortOffset = data[index + 1];
-		offset = shortOffset;
-	}
-	// fetch low
-	offset |= data[index + 1];
-	char offsetStr[16] = {};
-	sprintf(offsetStr, "%d", offset);
-
-	output << "mov " << dst << ", " << offset;
-	output << std::endl;
-
-	if (is16bitsOps)
+	unsigned char opCode = data[index];
+	const OperationDescription& opDesc = instructionTable[opCode];
+	if (opDesc.op != UNKNOWNOPS)
 	{
-		index++;
+		result.op = opDesc.op;
+		// 000000DW
+		bool isRegDestination, is16bitsOps;
+		is16bitsOps = opCode & 1;
+		isRegDestination = opCode & 2;
+
+		// mov, add, sub, cmp
+		// modregrm or modcodrm
+		if (opDesc.hasTwoArguments && opDesc.op == IMMEDIATEOPS)
+		{
+			OperationType regToOperation[8];
+			regToOperation[0] = ADD; // 000
+			regToOperation[5] = SUB; // 101
+			regToOperation[7] = CMP; // 111
+
+			bool isSignedOperation = (opCode & 2);
+			unsigned char argOps = data[index + 1];
+			unsigned char rm = (argOps & 7);
+			unsigned char reg = (argOps >> 3) & 7;
+			unsigned char mod = (argOps >> 6) & 7;
+			bool registerMode = mod == 3;
+			index++;
+			result.op = regToOperation[reg];
+			if (registerMode) 
+			{
+				result.dst.reg = is16bitsOps ? registerMapping16bits[rm] : registerMapping8bits[rm];
+			}
+			else
+			{
+				bool isDirectMemory = (mod == 0) && rm == 6;
+				result.hasWordKeyword = is16bitsOps;
+				if (result.hasWordKeyword)
+				{
+					std::cout << "word";
+				}
+				result.hasByteKeyword = !is16bitsOps;
+				if (!isDirectMemory) {
+					result.dst = registerToMemory[rm];
+				}
+				// offset value
+				int16_t offset = 0;
+				if (isDirectMemory || mod == 2) {
+					offset |= data[index + 2];
+					offset = offset << 8;
+					offset |= data[index + 1];
+					index = index + 2;
+				}
+				else if (mod == 1) {
+					int8_t shortOffset = data[index + 1];
+					offset = shortOffset;
+					index = index + 1;
+				}
+				result.dst.offset.number = isSignedOperation ? offset : static_cast<uint16_t>(offset);
+			}
+
+			if (is16bitsOps && !isSignedOperation) {
+				result.immediate |= data[index + 2];
+				result.immediate = result.immediate << 8;
+				result.immediate |= data[index + 1];
+				index = index + 2;
+			}
+			//else if (mod == 1) {
+			else {
+				int8_t shortOffset = data[index + 1];
+				result.immediate = shortOffset;
+				index = index + 1;
+			}
+		}
+		else if (opDesc.hasTwoArguments) 
+		{
+			unsigned char argOps = data[index + 1];
+			unsigned char rm = (argOps & 7);
+			unsigned char reg = (argOps >> 3) & 7;
+			unsigned char mod = (argOps >> 6) & 7;
+			index++;
+
+			bool registerMode = mod == 3;
+			if (registerMode) 
+			{
+				if (is16bitsOps) {
+					result.src.reg = isRegDestination ? registerMapping16bits[rm] : registerMapping16bits[reg];
+					result.dst.reg = isRegDestination ? registerMapping16bits[reg] : registerMapping16bits[rm];
+				}
+				else {
+					result.src.reg = isRegDestination ? registerMapping8bits[rm] : registerMapping8bits[reg];
+					result.dst.reg = isRegDestination ? registerMapping8bits[reg] : registerMapping8bits[rm];
+				}
+			}
+			else 
+			{
+				Location memoryLocation = registerToMemory[rm];
+				bool isDirectMemory = (mod == 0) && rm == 6;
+				uint16_t value = 0;
+				if (isDirectMemory || mod == 2) {
+					value |= data[index + 2];
+					value = value << 8;
+					value |= data[index + 1];
+					index = index + 2;
+				}
+				else if (mod == 1) {
+					int8_t shortOffset = data[index + 1];
+					value = shortOffset;
+					index = index + 1;
+				}
+				memoryLocation.offset.number = value;
+
+				if (isRegDestination) {
+					result.dst.reg = is16bitsOps ? registerMapping16bits[reg] : registerMapping8bits[reg];
+					result.src = memoryLocation;
+				}
+				// store
+				else {
+					result.dst = memoryLocation;
+					result.src.reg = is16bitsOps ? registerMapping16bits[reg] : registerMapping8bits[reg];
+				}
+			}
+		}
+		// immediate mov to register
+		else if (opDesc.op == MOV && opDesc.hasData)
+		{
+			bool is16bitsOps;
+			is16bitsOps = opCode & 8; // 4th bits
+			unsigned char reg = opCode & 7;
+			result.dst.reg = is16bitsOps ? registerMapping16bits[reg] : registerMapping8bits[reg];
+			int16_t value = 0;
+			if (is16bitsOps) {
+				value |= data[index + 2];
+				value = value << 8;
+				value |= data[index + 1];
+				index = index + 2;
+			}
+			else {
+				int8_t shortOffset = data[index + 1];
+				value = shortOffset;
+				index = index + 1;
+			}
+			result.immediate = value;
+		}
+		// immediate add, sub, cmp
+		else if (opDesc.hasData)
+		{
+			bool is16bitsOps;
+			is16bitsOps = opCode & 1;
+			result.dst.reg = opDesc.defaultRegister;
+			int16_t value = 0;
+			// fetch hi byte
+			if (is16bitsOps) {
+				value |= data[index + 2];
+				value = value << 8;
+				value |= data[index + 1];
+				index = index + 2;
+			}
+			else {
+				int8_t shortOffset = data[index + 1];
+				value = shortOffset;
+				index = index + 1;
+			}
+			result.immediate = value;
+		}
+		// je, jnz, jl, ...
+		else if (opDesc.useIncrement)
+		{
+			char offsetStr[16] = {};
+			int8_t value = 0;
+			value = data[index+1];
+			result.immediate = value;
+			index++;
+		}
 	}
-	index++;
 }
 
-void decodeBytes(const std::vector<unsigned char>& data)
+void parseBinary(const std::vector<unsigned char>& data)
 {
 	std::ofstream output;
 	output.open("G:\\Projects\\TutoAssembly\\AssemblyDecoder\\ressources\\result.asm", std::ios::binary);
 	output << "bits 16" << std::endl;
-	// MOV:       11  2 | 3 | 3,            IMEDIATE MOV:     1 3  
-	// MOV: 100010DW MOD|REG|RM, mov AX, 12 IMEDIATE MOV: 1011WREG
-	const char* operationStr[255];
-	unsigned char movOperation = 34; // 100010
-	unsigned char immediatemovOperation = 11; // 1011WREG
-	unsigned char addOperation = 0;  // 000000
-	unsigned char addCarryOps  = 1;  // 000001
-	unsigned char subOperation = 10; // 001010
-	unsigned char subCarryOps  = 11; // 001011
-	unsigned char cmpOperation = 14; // 001110
-	unsigned char cmpCarryOps  = 15; // 001111
-	unsigned char immediateToRegisterOp = 32; // 100000
 
-	operationStr[movOperation] = "mov";
-	operationStr[immediatemovOperation] = "mov";
-	operationStr[addOperation] = "add";
-	operationStr[addCarryOps]  = "add";
-	operationStr[subOperation] = "sub";
-	operationStr[subCarryOps]  = "sub";
-	operationStr[cmpOperation] = "cmp";
-	operationStr[cmpCarryOps]  = "cmp";
-
-	unsigned char jumpEqualOps = 116; // 01110100
-	unsigned char jumpOnLessOps = 124; // 01111100
-	unsigned char jumpOnLessOrEqualOps = 126; // 01111110
-	unsigned char jumpOnNotAboveOrEqualOps = 114; // 01110010
-	unsigned char jumpOnNotAboveOps = 118; // 01110110
-	unsigned char jumpOnParityOps = 122; // 01111010
-	unsigned char jumpOnOverflowOps = 112; // 01110000
-	unsigned char jumpOnSignOps = 120; // 01111000
-	unsigned char jumpOnNotEqualOps = 117; // 01110101
-	unsigned char jumpOnGreaterOrEqualOps = 125; // 01111101
-	unsigned char jumpOnGreaterOps = 127; // 01111111
-	unsigned char jumpOnAboveOrEqualsOps = 115; // 01110011
-	unsigned char jumpOnAboveOps = 119; // 01110111
-	unsigned char jumpOnNotParityOps = 123; // 01111011
-	unsigned char jumpOnNotOverflowOps = 113; // 01110001
-	unsigned char jumpOnNotSignedOps = 121; // 01111001
-	unsigned char loopOps = 226; // 11100010
-	unsigned char loopWhileZeroOps = 225; // 11100001
-	unsigned char loopWhileNotZeroOps = 224; // 11100000
-	unsigned char jumpOnCxZeroOps = 227; // 11100011
-	
-	operationStr[jumpEqualOps] = "je";
-	operationStr[jumpOnLessOps] = "jl";
-	operationStr[jumpOnLessOrEqualOps] = "jle";
-	operationStr[jumpOnNotAboveOrEqualOps] = "jb";
-	operationStr[jumpOnNotAboveOps] = "jbe";
-	operationStr[jumpOnParityOps] = "jp";
-	operationStr[jumpOnOverflowOps] = "jo";
-	operationStr[jumpOnSignOps] = "js";
-	operationStr[jumpOnNotEqualOps] = "jne";
-	operationStr[jumpOnGreaterOrEqualOps] = "jnl";
-	operationStr[jumpOnGreaterOps] = "jg";
-	operationStr[jumpOnAboveOrEqualsOps] = "jnb";
-	operationStr[jumpOnAboveOps] = "ja";
-	operationStr[jumpOnNotParityOps] = "jnp";
-	operationStr[jumpOnNotOverflowOps] = "jno";
-	operationStr[jumpOnNotSignedOps] = "jns";
-	operationStr[loopOps] = "loop";
-	operationStr[loopWhileZeroOps] = "loopz";
-	operationStr[loopWhileNotZeroOps] = "loopnz";
-	operationStr[jumpOnCxZeroOps] = "jcxz";
-
-	const char* src = nullptr;
-	const char* dst = nullptr;
-	for (size_t i = 0; i < data.size(); )
+	std::vector<Operation> instructions(data.size());
+	for (size_t byteIndex = 0; byteIndex < data.size(); )
 	{
-		unsigned char current = data[i];
-		unsigned char currentOps = current >> 2;
-		if ((currentOps) == movOperation)
-		{
-			decodeMove(data, i, output);
-		}
-		else if ((current >> 4) == immediatemovOperation)
-		{
-			decodeImmediateMove(data, i, output);
-		}
-		else
-		{
-			const char* src = nullptr;
-			const char* dst = nullptr;
-			i = i + 1;
-			unsigned char argOps = data[i];
-			unsigned char rm = (argOps & 7);
-			unsigned char reg = (argOps >> 3) & 7;
-			unsigned char mod = (argOps >> 6) & 7;
-
-			bool isAddOps = (currentOps == addOperation);
-			bool isSubOps = (currentOps == subOperation);
-			bool isCmpOps = (currentOps == cmpOperation);
-			bool isAddCarryOps = (currentOps == addCarryOps);
-			bool isSubCarryOps = (currentOps == subCarryOps);
-			bool isCmpCarryOps = (currentOps == cmpCarryOps);
-			bool isImmediateOps = (currentOps == immediateToRegisterOp);
-
-			bool isJumpOps = (current >= jumpOnOverflowOps) && (current <= jumpOnGreaterOps);
-			bool isLoopOps = (current >= loopWhileNotZeroOps) && (current <= jumpOnCxZeroOps);
-
-			if (isAddOps || isSubOps || isCmpOps)
-			{
-				const char* opsStr = operationStr[currentOps];
-				bool isRegDestination, is16bitsOps;
-				is16bitsOps = current & 1;
-				isRegDestination = (current & 2);
-
-				output << opsStr << " ";
-				bool registerMode = mod == 3;
-				if (registerMode) {
-					if (is16bitsOps) {
-						src = isRegDestination ? registerMapping16bits[rm] : registerMapping16bits[reg];
-						dst = isRegDestination ? registerMapping16bits[reg] : registerMapping16bits[rm];
-					}
-					else {
-						src = isRegDestination ? registerMapping8bits[rm] : registerMapping8bits[reg];
-						dst = isRegDestination ? registerMapping8bits[reg] : registerMapping8bits[rm];
-					}
-					output << dst << ", " << src;
-				}
-				else {
-					// memory location
-					char address[32] = {};
-					address[0] = '[';
-					strcat(address, registerToMemory[rm]);
-					// offset value
-					int16_t offset = 0;
-					bool isDirectMemory = (mod == 0) && rm == 6;
-					if (isDirectMemory) {
-						address[0] = '[';
-						address[1] = '\0';
-						offset |= data[i + 2];
-						offset = offset << 8;
-						offset |= data[i + 1];
-					}
-					// fetch hi byte
-					else if (mod == 2) {
-						offset |= data[i + 2];
-						offset = offset << 8;
-						offset |= data[i + 1];
-					}
-					else if (mod == 1) {
-						int8_t shortOffset = data[i + 1];
-						offset = shortOffset;
-					}
-
-					if (offset) {
-						if (!isDirectMemory) {
-							strcat(address, " + ");
-						}
-						char offsetStr[16] = {};
-						sprintf(offsetStr, "%d", offset);
-						strcat(address, offsetStr);
-					}
-					strcat(address, "]");
-
-					// load
-					if (isRegDestination) {
-						dst = is16bitsOps ? registerMapping16bits[reg] : registerMapping8bits[reg];
-						src = address;
-					}
-					// store
-					else {
-						dst = address;
-						src = is16bitsOps ? registerMapping16bits[reg] : registerMapping8bits[reg];
-					}
-					output << dst << ", " << src;
-					// offset
-					if (mod == 1) {
-						i = i + 1;
-					}
-					if (mod == 2 || isDirectMemory) {
-						i = i + 2;
-					}
-				}
-			}
-			else if (isAddCarryOps || isSubCarryOps || isCmpCarryOps)
-			{
-				// nor arg ops
-				i = i - 1;
-				const char* opsStr = operationStr[currentOps];
-				bool is16bitsOps;
-				is16bitsOps = current & 1;
-				const char* dst = is16bitsOps ? "ax" : "al";
-				output << opsStr << " ";
-				output << dst << ", ";
-
-				int16_t offset = 0;
-				// fetch hi byte
-				if (is16bitsOps) {
-					offset |= data[i + 2];
-					offset = offset << 8;
-					offset |= data[i + 1];
-					i = i + 2;
-				}
-				else {
-					int8_t shortOffset = data[i + 1];
-					offset = shortOffset;
-					i = i + 1;
-				}
-				char offsetStr[16] = {};
-				sprintf(offsetStr, "%d", offset);
-				output << offsetStr;
-			}
-			else if(isImmediateOps)
-			{
-				const char* regToOperationStr[8];
-				regToOperationStr[0] = "add"; // 000
-				regToOperationStr[5] = "sub"; // 101
-				regToOperationStr[7] = "cmp"; // 111
-				const char* opsStr = regToOperationStr[reg];
-				bool is16bitsOps = current & 1;
-				bool isSignedOperation = (current & 2);
-
-				output << opsStr << " ";
-				bool registerMode = mod == 3;
-				if (registerMode) {
-					dst = is16bitsOps ? registerMapping16bits[rm] : registerMapping8bits[rm];
-				}
-				else
-				{
-					char address[32] = {};
-					if (is16bitsOps)
-					{
-						output << "word ";
-					}
-					else 
-					{
-						output << "byte ";
-					}
-					address[0] = '[';
-					strcat(address, registerToMemory[rm]);
-					// offset value
-					int16_t offset = 0;
-					bool isDirectMemory = (mod == 0) && rm == 6;
-					if (isDirectMemory) {
-						address[0] = '[';
-						address[1] = '\0';
-						offset |= data[i + 2];
-						offset = offset << 8;
-						offset |= data[i + 1];
-					}
-					// fetch hi byte
-					else if (mod == 2) {
-						offset |= data[i + 2];
-						offset = offset << 8;
-						offset |= data[i + 1];
-					}
-					else if (mod == 1) {
-						int8_t shortOffset = data[i + 1];
-						offset = shortOffset;
-					}
-
-					if (offset) {
-						char offsetStr[16] = {};
-						if (!isDirectMemory) {
-							strcat(address, " + ");
-						}
-						if (isSignedOperation) {
-							sprintf(offsetStr, "%d", offset);
-						}
-						else {
-							sprintf(offsetStr, "%u", offset);
-						}
-						strcat(address, offsetStr);
-					}
-					strcat(address, "]");
-					dst = address;
-
-					if (mod == 1) {
-						i = i + 1;
-					}
-					if (mod == 2 || isDirectMemory) {
-						i = i + 2;
-					}
-				}
-
-				int16_t immediate = 0;
-				if (is16bitsOps && !isSignedOperation) {
-					immediate |= data[i + 2];
-					immediate = immediate << 8;
-					immediate |= data[i + 1];
-					i = i + 2;
-				}
-				//else if (mod == 1) {
-				else {
-					int8_t shortOffset = data[i + 1];
-					immediate = shortOffset;
-					i = i + 1;
-				}
-				output << dst << ", " << immediate;
-			}
-			else if (isJumpOps || isLoopOps)
-			{
-				const char* opsStr = operationStr[current];
-				char offsetStr[16] = {};
-				int8_t offset = 0;
-				offset = data[i];
-				sprintf(offsetStr, "%d", offset);
-				output << opsStr << " " << offsetStr;
-			}
-			output << std::endl;
-		}
-		i++;
+		Operation currentOp = {};
+		decodeInstruction(data, byteIndex, currentOp);
+		printOperation(currentOp, output);
+		output << std::endl;
+		byteIndex++;
 	}
-
-	output.close();
 }
-
 
 int main()
 {
@@ -608,5 +264,6 @@ int main()
 		printBinary(fileData[i]);
 	}
 
-	decodeBytes(fileData);
+	initOperationTable();
+	parseBinary(fileData);
 }
