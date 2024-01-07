@@ -1,7 +1,7 @@
 
 
 #include "InstructionTable.h"
-
+#include <iomanip>
 
 OperationDescription instructionTable[255];
 
@@ -136,13 +136,6 @@ void initOperationTable()
 	instructionTable[227] = { JCXZ, false, false, true,    UNKNOWNREG };  // jcxz   11100011
 }
 
-
-/*void executeOperation(const Operation& operation, std::ofstream& output, bool simulate)
-{
-	printOperation(operation, output);
-	output << std::endl;
-}*/
-
 void printLocation(const Location& location, std::ofstream& output)
 {
 	// reg + offset
@@ -185,6 +178,75 @@ void printLocation(const Location& location, std::ofstream& output)
 	else if (location.reg != Register::UNKNOWNREG) {
 		output << registerToString[location.reg];
 	}
+}
+
+
+uint8_t registerMemory[16] = {};
+SimulationRegister ax = { AX, (void*)&registerMemory[0], 2 };
+SimulationRegister al = { AL, (void*)&registerMemory[1], 1 };
+SimulationRegister ah = { AH, (void*)&registerMemory[0], 1 };
+SimulationRegister bx = { BX, (void*)&registerMemory[2], 2 };
+SimulationRegister bl = { BL, (void*)&registerMemory[3], 1 };
+SimulationRegister bh = { BH, (void*)&registerMemory[2], 1 };
+SimulationRegister cx = { CX, (void*)&registerMemory[4], 2 };
+SimulationRegister cl = { CL, (void*)&registerMemory[5], 1 };
+SimulationRegister ch = { CH, (void*)&registerMemory[4], 1 };
+SimulationRegister dx = { DX, (void*)&registerMemory[6], 2 };
+SimulationRegister dl = { DL, (void*)&registerMemory[7], 1 };
+SimulationRegister dh = { DH, (void*)&registerMemory[6], 1 };
+SimulationRegister sp = { SP, (void*)&registerMemory[8], 2 };
+SimulationRegister bp = { BP, (void*)&registerMemory[10], 2 };
+SimulationRegister si = { SI, (void*)&registerMemory[12], 2 };
+SimulationRegister di = { DI, (void*)&registerMemory[14], 2 };
+
+std::map<Register, SimulationRegister*> registerToSimulationRegister = {
+	{ AX, &ax }, { AL, &al }, { AH, &ah },
+	{ BX, &bx }, { BL, &bl }, { BH, &bh },
+	{ CX, &cx }, { CL, &cl }, { CH, &ch },
+	{ DX, &dx }, { DL, &dl }, { DH, &dh },
+	{ SP, &sp },
+	{ BP, &bp },
+	{ SI, &si },
+	{ DI, &di },
+};
+
+void executeOperation(const Operation& currentOp)
+{
+	if (currentOp.op == MOV)
+	{
+		// to register
+		if (currentOp.dst.offset.reg == UNKNOWNREG && currentOp.dst.offset.number == 0)
+		{
+			SimulationRegister* dstRegister = registerToSimulationRegister[currentOp.dst.reg];
+			// load immadiate
+			if (currentOp.src.reg == UNKNOWNREG || currentOp.src.offset.reg == UNKNOWNREG && currentOp.src.offset.number == 0)
+			{
+				if (dstRegister->size == 2) {
+					dstRegister->mem = memcpy(dstRegister->mem, &currentOp.immediate, 2);
+				} 
+				else if (dstRegister->size == 1)
+				{
+					// copy low byte
+					char* src = (char*)&currentOp.immediate;
+					dstRegister->mem = memcpy(dstRegister->mem, (src + 1), 2);
+				}
+			}
+		}
+	}
+}
+
+void printSimulationTable(std::ofstream& output)
+{
+	output << "final register:" << std::endl;
+	output << std::setw(2) << std::setfill('0');
+	output << "      " << "ax: " << "0x" << std::setw(2) << std::setfill('0') << std::hex << *((int16_t*)ax.mem) << std::dec << " (" << *((int16_t*)ax.mem) << ")" << std::endl;
+	output << "      " << "bx: " << "0x" << std::setw(2) << std::setfill('0') << std::hex << *((int16_t*)bx.mem) << std::dec << " (" << *((int16_t*)bx.mem) << ")" << std::endl;
+	output << "      " << "cx: " << "0x" << std::setw(2) << std::setfill('0') << std::hex << *((int16_t*)cx.mem) << std::dec << " (" << *((int16_t*)cx.mem) << ")" << std::endl;
+	output << "      " << "dx: " << "0x" << std::setw(2) << std::setfill('0') << std::hex << *((int16_t*)dx.mem) << std::dec << " (" << *((int16_t*)dx.mem) << ")" << std::endl;
+	output << "      " << "sp: " << "0x" << std::setw(2) << std::setfill('0') << std::hex << *((int16_t*)sp.mem) << std::dec << " (" << *((int16_t*)sp.mem) << ")" << std::endl;
+	output << "      " << "bp: " << "0x" << std::setw(2) << std::setfill('0') << std::hex << *((int16_t*)bp.mem) << std::dec << " (" << *((int16_t*)bp.mem) << ")" << std::endl;
+	output << "      " << "si: " << "0x" << std::setw(2) << std::setfill('0') << std::hex << *((int16_t*)si.mem) << std::dec << " (" << *((int16_t*)si.mem) << ")" << std::endl;
+	output << "      " << "di: " << "0x" << std::setw(2) << std::setfill('0') << std::hex << *((int16_t*)di.mem) << std::dec << " (" << *((int16_t*)di.mem) << ")" << std::endl;
 }
 
 void printOperation(const Operation& operation, std::ofstream& output)

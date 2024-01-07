@@ -58,6 +58,13 @@ typedef enum : uint32_t
 	SP,
 } Register;
 
+struct SimulationRegister
+{
+	Register name;
+	void* mem;
+	size_t size;
+};
+
 struct Offset
 {
 	Register reg;
@@ -96,5 +103,7 @@ extern std::map<OperationType, const char*> operationToString;
 extern OperationDescription instructionTable[255];
 
 void initOperationTable();
+void executeOperation(const Operation& currentOp);
+void printSimulationTable(std::ofstream& output);
 void printLocation(const Location& location, std::ofstream& output);
 void printOperation(const Operation& operation, std::ofstream& output);

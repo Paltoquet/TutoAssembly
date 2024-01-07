@@ -241,15 +241,17 @@ void parseBinary(const std::vector<unsigned char>& data)
 		Operation currentOp = {};
 		decodeInstruction(data, byteIndex, currentOp);
 		printOperation(currentOp, output);
+		executeOperation(currentOp);
 		output << std::endl;
 		byteIndex++;
 	}
+	printSimulationTable(output);
 }
 
 int main()
 {
 	std::ifstream input;
-	input.open("G:\\Projects\\TutoAssembly\\AssemblyDecoder\\ressources\\ex3", std::ios::binary);
+	input.open("G:\\Projects\\TutoAssembly\\AssemblyDecoder\\ressources\\simulation\\ex1", std::ios::binary);
 
 	input.seekg(0, std::ios::end);
 	std::streampos fileSize = input.tellg();

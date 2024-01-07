@@ -142,10 +142,13 @@
     <None Include="..\ressources\result.asm" />
     <None Include="..\ressources\simple" />
     <None Include="..\ressources\simple.asm" />
+    <None Include="..\ressources\simulation\ex1" />
+    <None Include="..\ressources\simulation\ex1.asm" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="..\ressources\complex.txt" />
     <Text Include="..\ressources\simple.txt" />
+    <Text Include="..\ressources\simulation\ex1.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
